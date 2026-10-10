@@ -1,0 +1,24 @@
+# Private local notes (never commit)
+PROJECT_LOG.md
+
+# Secrets / local config (commit a .env.example instead)
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Local databases
+*.db
+*.sqlite3
+
+# Editor / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
