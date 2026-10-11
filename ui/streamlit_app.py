@@ -43,7 +43,7 @@ def call_analyze_api(payload: Dict[str, Any]) -> Dict[str, Any]:
     """Call backend POST /analyze endpoint, falling back to sample fixture if unavailable."""
     for path in ["/analyze", "/api/analyze"]:
         try:
-            r = httpx.post(f"{API_URL}{path}", json=payload, timeout=12.0)
+            r = httpx.post(f"{API_URL}{path}", json=payload, timeout=60.0)  # solver 10 s + LLM; p95 ~20 s
             if r.status_code == 200:
                 return r.json()
         except Exception:
