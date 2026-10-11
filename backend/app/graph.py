@@ -42,14 +42,20 @@ ASSUMPTIONS = [
     "broken machine restarts from scratch after the repair or on another machine."),
     "Moving a job away from the old plan costs 1 weight per hour moved and per machine change.",
 ]
-REFUSE = re.compile(r"\b(skip|ignore|bypass|disable|without|break)\b.*\b(skill|changeover|shift|rule|check|validat)",
-                    re.IGNORECASE)
+REFUSE = re.compile(r"\b(skip|ignore|bypass|disable|without|break)\b.*\b(skill|changeover|shift|rule|check|validat)"
+                    r"|even though|not movable|cannot run|can't run|ineligible", re.IGNORECASE)
+# A breakdown is mentioned but no machine is named: ask, don't guess.
+VAGUE_BREAKDOWN = re.compile(r"\b(a|some|one)\s+machine\b.*\b(broke|down|failed)", re.IGNORECASE)
 REPLAN = re.compile(r"re-?plan|break ?down|\bdown\b|rush|disruption", re.IGNORECASE)
 ORDER_ID = re.compile(r"\b([A-Z]-?\d{2,})\b")
 MACHINE_ID = re.compile(r"\b([A-Z]{2,}-\d+)\b")
 
 # Changes of the most recent replan, so "Why did order X move?" can be answered.
 _last_changes: dict[str, dict] = {}
+
+
+DEADLINE = re.compile(r"\b(?:by|before)\s+(\d{1,2}):(\d{2})\s*(today|tomorrow)?", re.IGNORECASE)
+TRADEOFF = re.compile(r"trade-?off|avoid(?:ing)? overtime|without overtime|no overtime", re.IGNORECASE)
 
 
 class State(TypedDict, total=False):
@@ -67,6 +73,8 @@ class State(TypedDict, total=False):
     changes: list
     explanation: str
     llm: dict
+    demand: dict
+    tradeoff: str
     steps: Annotated[list, operator.add]
 
 
@@ -100,7 +108,9 @@ def parse_request(state: State) -> dict:
                 "message": f"Unknown machine {unknown[0]}. Known machines: {', '.join(problem.machines)}.",
                 "steps": [_step("planner", "parse_request", {"route": "clarification_needed"})]}
     if not events and REPLAN.search(text):
-        events = _events_from_text(text, problem) or load_disruptions()
+        events = _events_from_text(text, problem)
+        if not events and not VAGUE_BREAKDOWN.search(text):
+            events = load_disruptions()  # e.g. "Load the disruption file and re-plan"
         if not events:
             return {"answer_type": "clarification_needed", "problem": problem,
                     "message": "Which machine is down, from when and for how long (or which rush order)?",
@@ -115,8 +125,27 @@ def parse_request(state: State) -> dict:
                     "message": f"Rush order {e.target} has unknown product {e.product}.",
                     "steps": [_step("planner", "parse_request", {"route": "clarification_needed"})]}
     route = "replan" if events else "plan"
-    return {"answer_type": route, "problem": problem, "events": events,
+    demand = _demand(text, problem, events)
+    return {"answer_type": route, "problem": problem, "events": events, "demand": demand,
+            "tradeoff": "requested" if TRADEOFF.search(text) else "",
             "steps": [_step("planner", "parse_request", {"route": route, "events": len(events)})]}
+
+
+def _demand(text: str, problem, events) -> dict | None:
+    """'Finish all orders by 14:00' / 'deliver R-201 on time by 18:00' -> which orders, by when."""
+    m = DEADLINE.search(text)
+    on_time = "on time" in text.lower()
+    if not (m or on_time):
+        return None
+    known = {o.order_id for o in problem.orders} | {e.target for e in events if e.kind == "rush_order"}
+    named = [x for x in ORDER_ID.findall(text) if x in known]
+    if not named and not re.search(r"\ball\b", text, re.IGNORECASE):
+        return None
+    deadline = None
+    if m:
+        day = problem.plan_start.date() + timedelta(days=1 if (m.group(3) or "").lower() == "tomorrow" else 0)
+        deadline = datetime.combine(day, datetime.min.time()).replace(hour=int(m.group(1)), minute=int(m.group(2)))
+    return {"orders": named or sorted(known), "deadline": deadline}
 
 
 def _events_from_text(text: str, problem) -> list[Disruption]:
@@ -144,7 +173,9 @@ def solve(state: State) -> dict:
 
     # Replan: start from the latest stored plan (or build the baseline first).
     steps = []
-    old_plan = store.latest_plan()
+    # Jobs of orders no longer in the data (e.g. an earlier rush order) are dropped from the old plan.
+    known = {o.order_id for o in problem.orders} | {e.target for e in state["events"] if e.kind == "rush_order"}
+    old_plan = [j for j in (store.latest_plan() or []) if j.order_id in known]
     if not old_plan:
         base = solve_schedule(problem, weights, allow_overtime=allow_ot)
         old_plan = base.jobs
@@ -169,6 +200,25 @@ def solve(state: State) -> dict:
     steps.append(_step("solver", "solve_schedule", {"status": result.status, "solve_s": result.solve_s},
                        {"weights": weights.model_dump(), "blocked": [b.model_dump(mode="json") for b in blocked]}))
     return {"result": result, "old_plan": old_plan, "blocked": blocked, "fixed": fixed, "steps": steps}
+
+
+def tradeoff(state: State) -> dict:
+    """'What do we lose if we avoid overtime?': solve again without overtime and compare."""
+    if not state.get("tradeoff") or state["answer_type"] != "plan":
+        return {}
+    req, problem = state["request"], state["problem"]
+    alt = solve_schedule(problem, req.weights or Weights(), allow_overtime=False)
+    a, b = state["result"].kpis, alt.kpis
+    if not (a and b):
+        return {"tradeoff": "Could not build both plans for the comparison.",
+                "steps": [_step("solver", "solve_schedule", {"status": alt.status, "purpose": "no_overtime"})]}
+    text = (f"With overtime: {a.late_orders} late orders ({a.total_lateness_h} h), {a.overtime_h} h overtime, "
+            f"{a.changeovers} changeovers. Without overtime: {b.late_orders} late orders ({b.total_lateness_h} h), "
+            f"0 h overtime, {b.changeovers} changeovers. Avoiding overtime changes late orders by "
+            f"{b.late_orders - a.late_orders:+d} and lateness by {round(b.total_lateness_h - a.total_lateness_h, 2):+} h.")
+    return {"tradeoff": text, "steps": [_step("solver", "solve_schedule",
+                                              {"status": alt.status, "purpose": "no_overtime",
+                                               "kpis": b.model_dump()})]}
 
 
 def check(state: State) -> dict:
@@ -202,8 +252,10 @@ def explain_node(state: State) -> dict:
     headline = _headline(state)
     full = f"{headline} {text}" if usage.get("llm_calls", 0) else headline
     return {"explanation": full, "llm": usage,
-            "steps": [_step("explainer", "explain", {"fact_check_passed": usage.get("fact_check_passed"),
-                                                     "llm_calls": usage.get("llm_calls", 0)})]}
+            "steps": [_step("explainer", "explain", {"llm_calls": usage.get("llm_calls", 0),
+                                                     "tokens": usage.get("tokens", 0)}),
+                      _step("checker", "check_facts", {"ok": bool(usage.get("fact_check_passed")),
+                                                       "fallback_used": bool(usage.get("fallback"))})]}
 
 
 REASONS = {
@@ -247,12 +299,14 @@ def _build():
     g = StateGraph(State)
     g.add_node("parse_request", parse_request)
     g.add_node("solve", solve)
+    g.add_node("tradeoff", tradeoff)
     g.add_node("check", check)
     g.add_node("diff", diff)
     g.add_node("explain", explain_node)
     g.set_entry_point("parse_request")
     g.add_conditional_edges("parse_request", _route, {"solve": "solve", "explain": "explain", END: END})
-    g.add_edge("solve", "check")
+    g.add_edge("solve", "tradeoff")
+    g.add_edge("tradeoff", "check")
     g.add_edge("check", "diff")
     g.add_edge("diff", "explain")
     g.add_edge("explain", END)
@@ -291,11 +345,33 @@ def run(req: AnalyzeRequest) -> AnalyzeResponse:
             due = {o.order_id: o.due for o in state["problem"].orders}
             late = [o for o in done if done[o] > due[o]]
             limitations.append(f"Late in this plan: {', '.join(sorted(late))}.")
+        demand = state.get("demand")
+        if demand:
+            done = {}
+            for j in r.jobs:
+                done[j.order_id] = max(done.get(j.order_id, j.end), j.end)
+            due = {o.order_id: o.due for o in state["problem"].orders}
+            missed = [o for o in demand["orders"] if o in done
+                      and done[o] > (demand["deadline"] or due[o])]
+            if missed:
+                answer = "infeasible"
+                when = f"by {demand['deadline']:%Y-%m-%d %H:%M}" if demand["deadline"] else "on time"
+                limitations.insert(0, f"Not possible: {len(missed)} of the requested orders cannot finish {when} "
+                                      f"in the best valid plan found ({', '.join(missed[:10])}"
+                                      f"{', ...' if len(missed) > 10 else ''}). The plan shown is the closest "
+                                      f"alternative.")
+        if state.get("tradeoff") and state["tradeoff"] != "requested":
+            answer = "explanation"
         if r.status == "GREEDY_FALLBACK":
             limitations.append("Solver found no better plan in time; showing the valid greedy plan.")
-        resp = AnalyzeResponse(run_id=run_id, answer_type=answer, summary=state["explanation"], plan=plan,
+        lead = limitations[0] if answer == "infeasible" else (
+            state["tradeoff"] if answer == "explanation" else "")
+        resp = AnalyzeResponse(run_id=run_id, answer_type=answer, summary=f"{lead} {state['explanation']}".strip(),
+                               plan=plan,
                                kpis=r.kpis.model_copy(update={"moved_jobs": len(state["changes"])}),
                                changes=state["changes"], validator=c,
+                               tradeoff=state["tradeoff"] if state.get("tradeoff") not in (None, "", "requested")
+                               else None,
                                assumptions=[f"Weights: {(state['request'].weights or Weights()).model_dump()}",
                                             *ASSUMPTIONS],
                                limitations=limitations)

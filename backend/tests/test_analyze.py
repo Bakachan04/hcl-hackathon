@@ -29,7 +29,7 @@ def test_plan_then_replan_returns_valid_plans_and_traces(client):
     assert replan["changes"], "a 6 h breakdown must move something"
 
     trace = client.get(f"/trace/{replan['run_id']}").json()
-    assert [s["tool"] for s in trace["steps"]][-1] == "explain"
+    assert [s["tool"] for s in trace["steps"]][-2:] == ["explain", "check_facts"]
 
 
 def test_rule_breaking_request_is_refused(client):
