@@ -1,109 +1,55 @@
-# HCL Hackathon
+# Production Re-Planner Under Disruption
 
-Full-stack starter for the HCLTech AI Engineer hackathon: a React dashboard backed by a Python API, with data processing and machine learning built in.
+HCLTech Future Ready AI Engineer Hackathon. A system that builds a valid production schedule with a solver (OR-Tools CP-SAT), re-plans when a machine breaks down or a rush order arrives, checks every plan against the scheduling rules, and has an LLM explain what changed using only facts returned by the tools.
 
-> **Status:** environment scaffold. The problem statement hasn't been released yet; features will be added once it is.
+> **Status:** work in progress. Project layout, shared data models and `GET /health` are in place. Solver, checker, loader and UI are being built.
 
 ## Tech stack
 
-| Layer | Tools |
+| Layer | Choice |
 |---|---|
-| Frontend | React 19, Vite, Recharts (charts), Lucide React (icons), Oxlint |
-| Backend | Python 3.14, FastAPI, Uvicorn |
-| Data / ML | pandas, NumPy, scikit-learn, SciPy |
-| Utilities | SQLite (built into Python), python-dotenv, httpx |
-| Testing | pytest |
+| UI | Streamlit, Plotly (Gantt chart) |
+| API | FastAPI, Uvicorn, Pydantic v2 |
+| Orchestration | LangGraph |
+| Solver | OR-Tools CP-SAT |
+| Data | pandas, SQLite |
+| LLM | Google Gemini (`gemini-3.5-flash-lite`) via `LLM_PROVIDER` / `LLM_MODEL`; `MOCK_LLM=true` runs without a key |
+| Quality | pytest, ruff |
 
 ## Project structure
 
 ```
-hcl-hackathon/
-├── backend/
-│   ├── main.py            # FastAPI app and routes
-│   ├── requirements.txt   # Python dependencies (pinned)
-│   ├── pytest.ini
-│   └── tests/
-└── frontend/
-    ├── src/               # React components
-    ├── vite.config.js     # dev server + /api proxy to the backend
-    └── package.json
+backend/
+  app/            FastAPI app, schemas, solver, checker, loader, LLM, pipeline
+  scripts/        data generator, CLI loader, validation script
+  eval/           evaluation set and runner
+  tests/
+ui/               Streamlit app
+docs/             data card, AI-usage disclosure, sample traces
+data/raw/         generated CSVs (not in Git)
 ```
 
-## Prerequisites
-
-- Python 3.12+ (tested on 3.14)
-- Node.js 20+ and npm (tested on Node 22)
-- Git
-
-## Setup
-
-### Backend
+## Setup (Python 3.11)
 
 ```powershell
 cd backend
-python -m venv .venv
+py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+copy .env.example .env     # then edit .env (keys never go in Git)
 ```
 
-On macOS/Linux, use `.venv/bin/python` instead of `.\.venv\Scripts\python.exe`.
-
-### Frontend
+## Run
 
 ```powershell
-cd frontend
-npm install
+# from backend/
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8000
+curl http://127.0.0.1:8000/health
 ```
 
-## Running locally
-
-Start both servers, each in its own terminal.
-
-**Backend** (http://127.0.0.1:8000), from `backend/`:
+## Test
 
 ```powershell
-.\.venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000
-```
-
-**Frontend** (http://localhost:5173), from `frontend/`:
-
-```powershell
-npm run dev
-```
-
-During development, the Vite dev server forwards every request under `/api` to the backend (see `frontend/vite.config.js`), so the frontend calls relative URLs such as `fetch('/api/health')` and no CORS setup is needed.
-
-## API
-
-Interactive API docs are served at http://127.0.0.1:8000/docs while the backend is running.
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/health` | Health check, returns `{"status": "ok"}` |
-
-```powershell
-curl http://127.0.0.1:8000/api/health
-```
-
-## Configuration
-
-No environment variables are required yet. When they are (for example an LLM API key), they go in `backend/.env`, which Git ignores, and a `backend/.env.example` with placeholder values will be committed:
-
-```
-EXAMPLE_API_KEY=your-key-here
-```
-
-## Testing and linting
-
-```powershell
-# backend, from backend/
+# from backend/
 .\.venv\Scripts\python.exe -m pytest
-
-# frontend, from frontend/
-npm run lint
-npm run build
+.\.venv\Scripts\python.exe -m ruff check .
 ```
-
-## Known limitations
-
-- The Vite `/api` proxy works only in development (`npm run dev`). A production deployment would need the backend to serve the built frontend, a reverse proxy, or CORS configuration.
-- The chart on the start page uses static sample data to check rendering.
