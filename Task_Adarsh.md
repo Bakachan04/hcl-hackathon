@@ -57,10 +57,10 @@
 - [x] **Run Ridhi's checker on the output.** Every plan must pass before moving on.
 
 ### A5. Solver layer 3: operators, shifts, overtime (14:05–14:30)
-- [ ] Each job gets exactly one qualified operator (skill level ≥ required), `NoOverlap` per operator.
-- [ ] Job must sit inside the operator's shift window, or extend at most 2 h past shift end (overtime).
-- [ ] Add `overtime weight × overtime minutes` to the objective.
-- [ ] Test on Lavanya's generated data; checker must report all OK.
+- [x] Each job gets exactly one qualified operator (skill level ≥ required), `NoOverlap` per operator.
+- [x] Job must sit inside the operator's shift window, or extend at most 2 h past shift end (overtime).
+- [x] Add `overtime weight × overtime minutes` to the objective.
+- [x] Test on Lavanya's generated data; checker must report all OK.
 
 ### A6. Re-planning and plan diff (14:30–15:00)
 - [ ] Jobs that ended before the disruption time `at`, and jobs running at `at` on other machines, are **fixed**. WIP with `movable = false` is fixed.

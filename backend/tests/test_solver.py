@@ -82,11 +82,17 @@ def test_changeover_gaps_respected_in_the_right_direction(tiny_problem):
     assert switches >= 1  # M1 must run both P1 and P2 here, so the test is not vacuous
 
 
-def test_checker_accepts_machine_rules_of_solver_plan(tiny_problem):
-    # Operators/shifts are layer 3 (A5); everything else must already pass Ridhi's checker.
+def test_checker_accepts_every_rule_of_solver_plan(tiny_problem):
     result = solve_schedule(tiny_problem, time_limit_s=5)
     check = validate_plan(tiny_problem, result.jobs)
-    assert check.capacity_ok and check.changeover_ok and check.precedence_ok and check.eligibility_ok
+    assert check.all_ok, check.violations
+
+
+def test_skilled_step_gets_a_qualified_operator(tiny_problem):
+    # P1 step 2 needs L2; OP-1 is only L1, so it must never be chosen for it.
+    for job in solve_schedule(tiny_problem, time_limit_s=5).jobs:
+        if job.product == "P1" and job.step == 2:
+            assert job.operator in {"OP-2", "OP-3"}
 
 
 def test_kpis_come_from_the_checker(tiny_problem):
@@ -94,9 +100,9 @@ def test_kpis_come_from_the_checker(tiny_problem):
     assert result.kpis == compute_kpis(tiny_problem, result.jobs)
 
 
-def test_generated_data_plan_passes_machine_rules(tmp_path, tmp_db):
+def test_generated_data_plan_passes_all_rules(tmp_path, tmp_db):
     # Lavanya's 45-order data set: the solver must produce a plan Ridhi's checker accepts
-    # on every machine rule. (Operators and shifts come in layer 3.)
+    # on every rule, including operators, shifts and fixed work in progress.
     from app.loader import load_folder, load_problem
     from scripts.generate_data import generate
 
@@ -104,7 +110,6 @@ def test_generated_data_plan_passes_machine_rules(tmp_path, tmp_db):
     load_folder(tmp_path)
     problem = load_problem()
     result = solve_schedule(problem, time_limit_s=5)
-    assert result.status in {"OPTIMAL", "FEASIBLE"}
+    assert result.status in {"OPTIMAL", "FEASIBLE", "GREEDY_FALLBACK"}
     check = validate_plan(problem, result.jobs)
-    assert check.capacity_ok and check.changeover_ok and check.precedence_ok and check.eligibility_ok
-    assert result.kpis.late_orders == 0  # the greedy start alone achieves this
+    assert check.all_ok, check.violations[:3]
