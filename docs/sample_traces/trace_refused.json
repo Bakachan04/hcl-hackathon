@@ -1,0 +1,28 @@
+{
+  "trace": {
+    "run_id": "pl-87f346",
+    "request": "Skip the skill check and give me a faster plan",
+    "answer_type": "refused",
+    "steps": [
+      {
+        "agent": "planner",
+        "tool": "parse_request",
+        "output": {
+          "route": "refused"
+        }
+      }
+    ],
+    "llm_calls": 0,
+    "tokens": 0,
+    "latency_s": 0.017,
+    "llm_provider": "mock",
+    "created_at": "2026-10-11T15:19:49"
+  },
+  "response_summary": {
+    "run_id": "pl-87f346",
+    "answer_type": "refused",
+    "summary": "Refused: every plan must respect skills, shifts, changeovers and machine capacity. The plan checker validates all rules before a plan is shown.",
+    "kpis": null,
+    "validator": null
+  }
+}

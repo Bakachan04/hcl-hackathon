@@ -1,0 +1,107 @@
+{
+  "trace": {
+    "run_id": "pl-83f188",
+    "request": "Machine CNC-3 is down for 6 hours from 10:00. Re-plan.",
+    "answer_type": "replan",
+    "steps": [
+      {
+        "agent": "planner",
+        "tool": "parse_request",
+        "output": {
+          "route": "replan",
+          "events": 1
+        }
+      },
+      {
+        "agent": "planner",
+        "tool": "load_plan_state",
+        "output": {
+          "jobs_in_old_plan": 119,
+          "fixed_jobs": 14,
+          "disruption_at": "2026-10-12 10:00:00"
+        }
+      },
+      {
+        "agent": "solver",
+        "tool": "solve_schedule",
+        "input": {
+          "weights": {
+            "late": 10,
+            "overtime": 3,
+            "changeover": 1
+          },
+          "blocked": [
+            {
+              "machine": "CNC-3",
+              "start": "2026-10-12T10:00:00",
+              "end": "2026-10-12T16:00:00"
+            }
+          ]
+        },
+        "output": {
+          "status": "FEASIBLE",
+          "solve_s": 10.1
+        }
+      },
+      {
+        "agent": "checker",
+        "tool": "validate_plan",
+        "output": {
+          "capacity_ok": true,
+          "skill_ok": true,
+          "changeover_ok": true,
+          "precedence_ok": true,
+          "eligibility_ok": true,
+          "shift_ok": true,
+          "wip_ok": true,
+          "breakdown_ok": true,
+          "all_ok": true
+        }
+      },
+      {
+        "agent": "planner",
+        "tool": "diff_plans",
+        "output": {
+          "moved_jobs": 77
+        }
+      },
+      {
+        "agent": "explainer",
+        "tool": "explain",
+        "output": {
+          "fact_check_passed": true,
+          "llm_calls": 0
+        }
+      }
+    ],
+    "llm_calls": 0,
+    "tokens": 0,
+    "latency_s": 10.444,
+    "llm_provider": "mock",
+    "created_at": "2026-10-11T15:19:49"
+  },
+  "response_summary": {
+    "run_id": "pl-83f188",
+    "answer_type": "replan",
+    "summary": "Disruption: CNC-3 down from 10:00 for 6.0 h. 77 jobs moved. 45 orders planned: 8 late (35.28 h total), 2.72 h overtime, 31 changeovers; all rules pass the plan checker.",
+    "kpis": {
+      "late_orders": 8,
+      "total_lateness_h": 35.28,
+      "overtime_h": 2.72,
+      "changeovers": 31,
+      "moved_jobs": 77
+    },
+    "validator": {
+      "capacity_ok": true,
+      "skill_ok": true,
+      "changeover_ok": true,
+      "precedence_ok": true,
+      "eligibility_ok": true,
+      "shift_ok": true,
+      "wip_ok": true,
+      "breakdown_ok": true,
+      "violations": [],
+      "all_ok": true
+    }
+  }
+}
