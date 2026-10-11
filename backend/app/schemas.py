@@ -3,6 +3,7 @@
 Change a model only after telling the team: everyone's code depends on these.
 """
 
+import math
 from datetime import datetime, time
 from typing import Any, Literal
 
@@ -14,6 +15,11 @@ TIME_FMT = "%Y-%m-%d %H:%M"
 def skill_rank(skill: str) -> int:
     """'L2' -> 2. A higher level can do lower-level work."""
     return int(skill.strip().upper().lstrip("L"))
+
+
+def job_minutes(qty: int, minutes_per_unit: float) -> int:
+    """Duration of one order step. Solver and checker must both use this."""
+    return math.ceil(qty * minutes_per_unit)
 
 
 # ---------- Input data (built by the loader) ----------
