@@ -129,7 +129,7 @@ execute_btn = st.button("🚀 Run Analysis / Re-plan", type="primary")
 # Execute or Load Response
 if "analysis_result" not in st.session_state or execute_btn or action_prompt:
     request_body = {
-        "message": user_query or "Re-plan schedule under current constraints.",
+        "message": user_query or "Build today's schedule.",
         "weights": {
             "late": weight_late,
             "overtime": weight_overtime,
