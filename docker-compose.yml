@@ -1,0 +1,54 @@
+# docker compose up --build
+#   API: http://localhost:8000/health   UI: http://localhost:8501
+# Settings come from backend/.env when it exists (copy backend/.env.example);
+# without it the app runs in mock-LLM mode.
+
+x-app: &app
+  image: replanner:latest
+  env_file:
+    - path: backend/.env
+      required: false
+  environment:
+    DB_PATH: /app/data/planner.db
+    DATA_DIR: /app/data/raw
+  volumes:
+    - planner-data:/app/data
+
+services:
+  api:
+    <<: *app
+    build: .   # ui reuses this image
+    # Generate the synthetic pack on first start, load it, then serve.
+    command: >
+      sh -c "if [ -z \"$$(ls -A /app/data/raw 2>/dev/null)\" ]; then
+               python scripts/generate_data.py --seed 42 --out /app/data/raw;
+             fi &&
+             python scripts/load_data.py /app/data/raw &&
+             python scripts/validate_data.py --no-card;
+             exec uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  ui:
+    <<: *app
+    pull_policy: never
+    command: >
+      python -m streamlit run /app/ui/streamlit_app.py
+      --server.port 8501 --server.address 0.0.0.0 --server.headless true
+    environment:
+      DB_PATH: /app/data/planner.db
+      DATA_DIR: /app/data/raw
+      API_URL: http://api:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  planner-data:
