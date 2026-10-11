@@ -125,6 +125,8 @@ Sample traces for three answer types: [docs/sample_traces/](docs/sample_traces/)
 
 - CP-SAT rarely proves optimality within 10 s on 45+ orders; plans are valid but may not be the best possible. Quality drops as the data grows (measured at 60 and 90 orders).
 - Re-plans are stable where possible, but a long breakdown on a bottleneck machine moves many downstream jobs.
-- Requests are routed by keyword rules; unusual phrasing may get `clarification_needed`. Explicit deadline requests ("finish all by 17:00", answer type `infeasible`) and the with/without-overtime trade-off answer are not implemented yet; `avoid_overtime: true` in the request plans without overtime.
+- Requests are routed by keyword rules; unusual phrasing may get `clarification_needed`.
+- Deadline demands ("finish all by 14:00", "R-201 on time by 18:00") are answered `infeasible` when the best valid plan found within the time limit misses them, with that plan shown as the closest alternative. This is judged from the solver's best plan, not a mathematical proof of impossibility.
+- The overtime trade-off ("explain the trade-off…", "avoid overtime") solves twice, with and without overtime, and compares the numbers; `avoid_overtime: true` in a request plans without overtime.
 - "Why did order X move?" uses the most recent replan held in memory; it is lost when the API restarts.
 - Edge cases from the data pack (where they are planted is in [docs/data_card.md](docs/data_card.md)): order only runnable on the broken machine, rare-skill operator, direction-dependent changeovers, rush order with the same due date as a P1 order, unmovable WIP, a disruption that makes on-time delivery impossible.
