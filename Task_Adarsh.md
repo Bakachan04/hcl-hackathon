@@ -45,11 +45,11 @@
 - [x] Lets you build the solver before Lavanya's generator is ready.
 
 ### A3. Solver layer 1: machines, precedence, lateness (13:15–13:45)
-- [ ] `solver.solve_schedule(...)` per the signature in Shared contracts.
-- [ ] One optional interval per (job, eligible machine); exactly one chosen; `NoOverlap` per machine.
-- [ ] Steps of an order run in order (precedence).
-- [ ] Objective: `late weight × Σ priority factor × lateness` (priority 1 → ×3, 2 → ×2, 3 → ×1; `customer_tier` 1 adds ×2). This is R11.
-- [ ] Solver time limit (default 10 s); return `status`, `plan`, `kpis`, `solve_s`.
+- [x] `solver.solve_schedule(...)` per the signature in Shared contracts.
+- [x] One optional interval per (job, eligible machine); exactly one chosen; `NoOverlap` per machine.
+- [x] Steps of an order run in order (precedence).
+- [x] Objective: `late weight × Σ priority factor × lateness` (priority 1 → ×3, 2 → ×2, 3 → ×1; `customer_tier` 1 adds ×2). This is R11.
+- [x] Solver time limit (default 10 s); return `status`, `plan`, `kpis`, `solve_s`.
 
 ### A4. Solver layer 2: changeovers (13:45–14:05)
 - [ ] Sequence-dependent changeover gap on each machine using `AddCircuit` (direction matters: A→B ≠ B→A).
