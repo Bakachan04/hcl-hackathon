@@ -1,0 +1,16 @@
+Data validation report  2026-10-11 14:11
+Store: planner.db   plan start: 2026-10-12 06:00
+Stored rows: orders=45, routings_machines=10, changeovers_skills=27, disruption=2
+Data card: data_card.md
+CHECK                            RESULT  DETAIL
+-----------------------------------------------------------------------
+order_products_have_routing      PASS    45 orders, 4 products, all routed
+routing_steps_have_machine       PASS    10 steps on 8 machines
+due_after_plan_start             PASS    all due after 2026-10-12 06:00
+changeovers_cover_product_pairs  PASS    12/12 pairs covered
+roster_hours_valid               PASS    15 operators, no overlaps
+row_counts_match_data_card       PASS    orders=45, routings=10, changeovers=12, operators=15
+skills_have_operator             PASS    every required skill is covered
+wip_consistent                   PASS    3 WIP jobs consistent
+-----------------------------------------------------------------------
+OVERALL                          PASS    8/8 checks passed
