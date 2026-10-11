@@ -291,3 +291,4 @@ with st.expander("🔍 Trace & Raw JSON Inspection"):
     st.json(data.get("trace", {}))
     st.markdown("**Full Response:**")
     st.json(data)
+

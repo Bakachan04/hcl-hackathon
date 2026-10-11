@@ -118,3 +118,4 @@ def test_explain_with_hallucination_triggers_retry_and_fallback(sample_facts):
         # Verify deterministic fallback itself passes fact checking!
         fallback_check = check_facts(text, sample_facts)
         assert fallback_check["ok"] is True
+

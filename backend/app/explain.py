@@ -267,3 +267,4 @@ def explain(facts: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
         "fallback": True,
         "unknown_items": retry_check["unknown_items"],
     }
+
