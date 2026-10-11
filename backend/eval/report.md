@@ -1,6 +1,6 @@
 # Evaluation report
 
-> **Status:** the method and the 24 cases are final. The results tables are filled in once `POST /analyze` runs end to end (planned for 15:15).
+> **Status:** final. All 24 cases run against `POST /analyze` on 11-Oct-2026; results below.
 
 ## Method
 
@@ -41,31 +41,40 @@ Add `--url http://localhost:8000` to test a running server (for example the Dock
 
 ## Results
 
-_To be filled from `eval/results/*.json` after the run._
+Three configurations, all on the seed-42 pack, run in-process. Raw per-case results: `eval/results/*.json`.
 
-| Metric | Config A | Config B |
-|---|---|---|
-| Cases passed | | |
-| answer_type accuracy | | |
-| Plan validity | | |
-| Avg late orders | | |
-| Avg total lateness (h) | | |
-| Avg overtime (h) | | |
-| Avg changeovers | | |
-| Avg jobs moved (re-plans) | | |
-| Solve time p50 / max (s) | | |
-| Latency p50 / p95 (s) | | |
-| Explanation faithfulness | | |
-| LLM calls / tokens | | |
+| Metric | **A: solver 10 s (chosen)** | B: solver 3 s | C: solver 10 s + Gemini LLM |
+|---|---|---|---|
+| Cases passed | **24 / 24** | 24 / 24 | 21 / 24 (run before the A7 fix) |
+| answer_type accuracy | 100% | 100% | 87.5% |
+| Plan validity (API validator and our own checker agree) | **17 / 17 = 100%** | 17 / 17 = 100% | 17 / 17 = 100% |
+| Avg late orders per plan | **7.0** | 11.9 | 5.4 |
+| Avg total lateness (h) | **27.3** | 43.8 | 25.1 |
+| Avg overtime (h) | **2.6** | 8.3 | 2.6 |
+| Avg changeovers | **31.5** | 36.1 | 31.4 |
+| Avg jobs moved per re-plan | 56.7 | 42.0 | 46.7 |
+| Solve time p50 / max (s) | 10.1 / 11.0 | 3.2 / 3.5 | 10.2 / 10.6 |
+| Latency p50 / p95 (s) | 10.6 / 11.9 | 4.1 / 4.8 | 12.6 / 19.5 |
+| Explanation faithfulness | 100% | 100% | **100% (19 / 19 LLM explanations)** |
+| LLM calls / tokens (whole run) | 0 / 0 (mock) | 0 / 0 (mock) | 20 / 22,214 (~1.1k per request) |
 
-## Configurations compared
+Averages include the stress cases (6 h breakdown on a bottleneck machine, impossible deadlines), which is why late orders are well above the 0–1 of the undisrupted plan.
 
-_To be decided with the team. Candidates: `gemini-3.5-flash-lite` vs `gemini-3.8-flash`, or the solver's stability penalty on vs off._
+### Choice and why
 
-## Choice and why
+- **Solver time limit 10 s (A) over 3 s (B):** A has about 40% fewer late orders (7.0 vs 11.9), 38% less lateness and about 70% less overtime. B is about 6 s faster per request and moves fewer jobs, but lands much worse plans. A replan "within a few minutes" (guide 4.6) is met easily by 10 s.
+- **LLM on (C) vs mock (A):** plan quality is the same, because the solver builds the plan either way. The LLM adds about 2 s median latency and about 1.1k tokens per request. In exchange it gives a readable explanation, and every one passed the fact check. We demo with the LLM on and keep mock mode as the fallback.
 
-_To be written from the numbers above._
+### History (what the evaluation caught)
 
-## Failed cases and what they show
+- **First run: 17 / 24.**
+  - A real bug: a replan after an earlier rush order kept that order's jobs as "fixed" although the order was not in the data, so the plan failed the WIP check (C10, C11).
+  - Routing gaps: C20, C22, C23.
+- **After fixes: 21 / 24.** Remaining: deadline demands and the trade-off question (C12, C13, C16).
+- **After the minimal deadline/trade-off feature: 24 / 24.**
 
-_To be written after the run._
+### Limits of this evaluation
+
+- One data set (seed 42) and its 3 disruption files; no large or unseen data. A stress test at 60 and 90 orders (PROJECT notes) gave valid plans with more late orders.
+- `infeasible` is judged from the best valid plan found within the time limit, not a mathematical proof.
+- CP-SAT runs in parallel, so KPI averages vary by a few percent between runs. Validity and pass/fail did not change.
