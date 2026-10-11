@@ -154,11 +154,12 @@ source_label = st.session_state.get("source", "Demo Fixture")
 if source_label.startswith("Saved Sample"):
     st.info(f"ℹ️ **Data Source:** {source_label}. Backend `/analyze` endpoint was unreachable; showing verified demonstration plan.")
 else:
-    st.success(f"✅ **Data Source:** {source_label} (Run ID: `{data.get('run_id', 'N/A')}`)")
+    st.success(f"✅ **Data Source:** {source_label} (Run ID: `{data.get('run_id', 'N/A')}`, "
+               f"answer type: **{data.get('answer_type', 'N/A')}**)")
 
 
 # 1. Plain-Language Explanation Callout
-explanation = data.get("explanation", "No explanation available.")
+explanation = data.get("summary") or data.get("explanation") or "No explanation available."
 st.subheader("📢 Plant Manager Briefing")
 st.info(explanation)
 
@@ -176,7 +177,7 @@ kpi_cols[4].metric("Moved Jobs", kpis.get("moved_jobs", 0))
 
 # 3. Gantt Chart (Plotly Timeline with Changed Jobs & Breakdowns)
 st.subheader("📅 Schedule Gantt Chart (R10)")
-jobs = data.get("jobs", [])
+jobs = data.get("plan") or data.get("jobs") or []
 blocked = data.get("blocked", [])
 
 if jobs:
@@ -258,19 +259,21 @@ with col_changes:
 
 with col_validation:
     st.subheader("🛡️ Constraint Validation Status")
-    check = data.get("check", {})
+    check = data.get("validator") or data.get("check") or {}
     rules = [
-        ("Machine Capacity (No Overlap)", check.get("capacity_ok", True)),
-        ("Operator Skills", check.get("skill_ok", True)),
-        ("Changeover Gaps", check.get("changeover_ok", True)),
-        ("Routing Precedence", check.get("precedence_ok", True)),
-        ("Machine Eligibility & Duration", check.get("eligibility_ok", True)),
-        ("Shift Bounds & Overtime", check.get("shift_ok", True)),
-        ("WIP & Fixed Jobs", check.get("wip_ok", True)),
-        ("Breakdown Avoidance", check.get("breakdown_ok", True)),
+        ("Machine Capacity (No Overlap)", check.get("capacity_ok", False)),
+        ("Operator Skills", check.get("skill_ok", False)),
+        ("Changeover Gaps", check.get("changeover_ok", False)),
+        ("Routing Precedence", check.get("precedence_ok", False)),
+        ("Machine Eligibility & Duration", check.get("eligibility_ok", False)),
+        ("Shift Bounds & Overtime", check.get("shift_ok", False)),
+        ("WIP & Fixed Jobs", check.get("wip_ok", False)),
+        ("Breakdown Avoidance", check.get("breakdown_ok", False)),
     ]
 
-    for label, is_ok in rules:
+    if not check:
+        st.write("No plan to validate for this answer.")
+    for label, is_ok in rules if check else []:
         if is_ok:
             st.markdown(f"✅ **{label}**: Passed")
         else:
@@ -288,7 +291,13 @@ st.markdown("---")
 with st.expander("🔍 Trace & Raw JSON Inspection"):
     st.markdown(f"**Run ID:** `{data.get('run_id', 'N/A')}`")
     st.markdown("**Pipeline Trace:**")
-    st.json(data.get("trace", {}))
+    trace = data.get("trace") or {}
+    if not trace and data.get("run_id"):
+        try:
+            trace = httpx.get(f"{API_URL}/trace/{data['run_id']}", timeout=5).json()
+        except Exception:
+            trace = {}
+    st.json(trace)
     st.markdown("**Full Response:**")
     st.json(data)
 
