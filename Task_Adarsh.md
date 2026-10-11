@@ -30,19 +30,19 @@
 ## Tasks
 
 ### A1. Environment reset and shared contracts (12:50–13:05) — **do first, blocks the team**
-- [ ] Recreate `backend/.venv` with Python 3.11 (`py -3.11 -m venv .venv`) and update `requirements.txt` pins (see Shared contracts).
-- [ ] Delete `frontend/` (we use Streamlit). Add `data/` to `.gitignore`.
-- [ ] Create `backend/.env.example` with `LLM_PROVIDER`, `LLM_MODEL`, `MOCK_LLM`, `GEMINI_API_KEY=`, `PLAN_START`, `DB_PATH`.
-- [ ] Create the folder layout and empty module files listed in Shared contracts.
-- [ ] Write `app/config.py` (reads `.env`) and `app/schemas.py` (all models in Shared contracts).
-- [ ] Move the health route to `GET /health`; it must report API, data store and LLM status.
-- [ ] Push to `main` and tell the team in the group chat.
+- [x] Recreate `backend/.venv` with Python 3.11 (`py -3.11 -m venv .venv`) and update `requirements.txt` pins (see Shared contracts).
+- [x] Delete `frontend/` (we use Streamlit). Add `data/` to `.gitignore`.
+- [x] Create `backend/.env.example` with `LLM_PROVIDER`, `LLM_MODEL`, `MOCK_LLM`, `GEMINI_API_KEY=`, `PLAN_START`, `DB_PATH`.
+- [x] Create the folder layout and empty module files listed in Shared contracts.
+- [x] Write `app/config.py` (reads `.env`) and `app/schemas.py` (all models in Shared contracts).
+- [x] Move the health route to `GET /health`; it must report API, data store and LLM status.
+- [x] Push to `main` and tell the team in the group chat.
 
 **Done when:** `pytest` passes on Python 3.11 and the teammates have pulled `main`.
 
 ### A2. Tiny test fixture (13:05–13:15)
-- [ ] `backend/tests/fixtures/tiny/`: 3 orders, 2 products, 2 machines, 2 operators, written by hand in the Annex B schema.
-- [ ] Lets you build the solver before Lavanya's generator is ready.
+- [x] `tiny_problem` pytest fixture in `backend/tests/conftest.py`: 3 orders, 2 products, 2 machines, 3 operators, built directly as a `Problem`.
+- [x] Lets you build the solver before Lavanya's generator is ready.
 
 ### A3. Solver layer 1: machines, precedence, lateness (13:15–13:45)
 - [ ] `solver.solve_schedule(...)` per the signature in Shared contracts.
