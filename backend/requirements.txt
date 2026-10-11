@@ -1,16 +1,30 @@
+# Python 3.11 (pinned by the hackathon stack rules)
+
 # API
 fastapi==0.143.0
 uvicorn[standard]==0.54.0
+pydantic==2.14.0
+python-multipart==0.0.32   # multipart form uploads for POST /ingest
 
-# Data processing and ML
+# Orchestration
+langgraph==1.2.14
+
+# Solver and data
+ortools==9.15.6755         # CP-SAT scheduling solver
 pandas==3.0.6
-numpy==2.5.4
-scikit-learn==1.9.1
-scipy==1.18.1
+numpy==2.4.6
+
+# UI and plan view
+streamlit==1.65.0
+plotly==7.1.0
+
+# LLM (Gemini free tier; mock mode needs no key)
+google-genai==2.29.0
 
 # Utilities
 python-dotenv==1.2.4
 httpx==0.28.1
 
-# Testing
+# Quality
 pytest==9.1.1
+ruff==0.17.0
