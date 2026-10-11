@@ -38,6 +38,29 @@ py -3.11 -m venv .venv
 copy .env.example .env     # then edit .env (keys never go in Git)
 ```
 
+## Data
+
+```powershell
+# from backend/
+.\.venv\Scripts\python.exe scripts\generate_data.py --seed 42 --out ..\data\raw   # synthetic pack (same seed = same files)
+.\.venv\Scripts\python.exe scripts\load_data.py ..\data\raw                       # load any Annex B folder into SQLite
+.\.venv\Scripts\python.exe scripts\validate_data.py                               # PASS/FAIL table (guide 4.5)
+```
+
+Load one table while the API is running:
+
+```powershell
+curl -F "file=@data/raw/orders.csv" -F "meta={\"table\":\"orders\"}" http://localhost:8000/ingest
+```
+
+What the data contains and where each edge case is planted: [docs/data_card.md](docs/data_card.md).
+
+## Docker
+
+```powershell
+docker compose up --build    # API on :8000 (generates + loads data on first start), UI on :8501
+```
+
 ## Run
 
 ```powershell
