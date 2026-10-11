@@ -42,8 +42,10 @@ ASSUMPTIONS = [
     "broken machine restarts from scratch after the repair or on another machine."),
     "Moving a job away from the old plan costs 1 weight per hour moved and per machine change.",
 ]
-REFUSE = re.compile(r"\b(skip|ignore|bypass|disable|without|break)\b.*\b(skill|changeover|shift|rule|check|validat)",
-                    re.IGNORECASE)
+REFUSE = re.compile(r"\b(skip|ignore|bypass|disable|without|break)\b.*\b(skill|changeover|shift|rule|check|validat)"
+                    r"|even though|not movable|cannot run|can't run|ineligible", re.IGNORECASE)
+# A breakdown is mentioned but no machine is named: ask, don't guess.
+VAGUE_BREAKDOWN = re.compile(r"\b(a|some|one)\s+machine\b.*\b(broke|down|failed)", re.IGNORECASE)
 REPLAN = re.compile(r"re-?plan|break ?down|\bdown\b|rush|disruption", re.IGNORECASE)
 ORDER_ID = re.compile(r"\b([A-Z]-?\d{2,})\b")
 MACHINE_ID = re.compile(r"\b([A-Z]{2,}-\d+)\b")
@@ -100,7 +102,9 @@ def parse_request(state: State) -> dict:
                 "message": f"Unknown machine {unknown[0]}. Known machines: {', '.join(problem.machines)}.",
                 "steps": [_step("planner", "parse_request", {"route": "clarification_needed"})]}
     if not events and REPLAN.search(text):
-        events = _events_from_text(text, problem) or load_disruptions()
+        events = _events_from_text(text, problem)
+        if not events and not VAGUE_BREAKDOWN.search(text):
+            events = load_disruptions()  # e.g. "Load the disruption file and re-plan"
         if not events:
             return {"answer_type": "clarification_needed", "problem": problem,
                     "message": "Which machine is down, from when and for how long (or which rush order)?",
@@ -144,7 +148,9 @@ def solve(state: State) -> dict:
 
     # Replan: start from the latest stored plan (or build the baseline first).
     steps = []
-    old_plan = store.latest_plan()
+    # Jobs of orders no longer in the data (e.g. an earlier rush order) are dropped from the old plan.
+    known = {o.order_id for o in problem.orders} | {e.target for e in state["events"] if e.kind == "rush_order"}
+    old_plan = [j for j in (store.latest_plan() or []) if j.order_id in known]
     if not old_plan:
         base = solve_schedule(problem, weights, allow_overtime=allow_ot)
         old_plan = base.jobs
@@ -202,8 +208,10 @@ def explain_node(state: State) -> dict:
     headline = _headline(state)
     full = f"{headline} {text}" if usage.get("llm_calls", 0) else headline
     return {"explanation": full, "llm": usage,
-            "steps": [_step("explainer", "explain", {"fact_check_passed": usage.get("fact_check_passed"),
-                                                     "llm_calls": usage.get("llm_calls", 0)})]}
+            "steps": [_step("explainer", "explain", {"llm_calls": usage.get("llm_calls", 0),
+                                                     "tokens": usage.get("tokens", 0)}),
+                      _step("checker", "check_facts", {"ok": bool(usage.get("fact_check_passed")),
+                                                       "fallback_used": bool(usage.get("fallback"))})]}
 
 
 REASONS = {
