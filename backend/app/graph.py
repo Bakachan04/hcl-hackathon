@@ -46,6 +46,7 @@ REFUSE = re.compile(r"\b(skip|ignore|bypass|disable|without|break)\b.*\b(skill|c
                     re.IGNORECASE)
 REPLAN = re.compile(r"re-?plan|break ?down|\bdown\b|rush|disruption", re.IGNORECASE)
 ORDER_ID = re.compile(r"\b([A-Z]-?\d{2,})\b")
+MACHINE_ID = re.compile(r"\b([A-Z]{2,}-\d+)\b")
 
 # Changes of the most recent replan, so "Why did order X move?" can be answered.
 _last_changes: dict[str, dict] = {}
@@ -93,6 +94,11 @@ def parse_request(state: State) -> dict:
                 "steps": [_step("planner", "parse_request", {"route": "explanation", "order": m.group(1)})]}
 
     events = list(req.disruption or [])
+    unknown = [t for t in MACHINE_ID.findall(text) if t not in problem.machines and not ORDER_ID.fullmatch(t)]
+    if not events and unknown:
+        return {"answer_type": "clarification_needed", "problem": problem,
+                "message": f"Unknown machine {unknown[0]}. Known machines: {', '.join(problem.machines)}.",
+                "steps": [_step("planner", "parse_request", {"route": "clarification_needed"})]}
     if not events and REPLAN.search(text):
         events = _events_from_text(text, problem) or load_disruptions()
         if not events:
@@ -191,8 +197,42 @@ def explain_node(state: State) -> dict:
                  "changes": [c.model_dump() for c in state["changes"][:15]],
                  "moved_jobs": len(state["changes"])}
     text, usage = explain(facts)
-    return {"explanation": text, "llm": usage,
-            "steps": [_step("explainer", "explain", {"fact_check_passed": usage.get("fact_check_passed")})]}
+    # A headline built in code from tool results is always shown; the LLM text is added only
+    # when a real LLM answered (mock mode returns a generic template).
+    headline = _headline(state)
+    full = f"{headline} {text}" if usage.get("llm_calls", 0) else headline
+    return {"explanation": full, "llm": usage,
+            "steps": [_step("explainer", "explain", {"fact_check_passed": usage.get("fact_check_passed"),
+                                                     "llm_calls": usage.get("llm_calls", 0)})]}
+
+
+REASONS = {
+    "machine_down": "its machine is broken down",
+    "displaced_by_rush": "a rush order took its slot",
+    "precedence": "its previous step now finishes later",
+    "rebalanced": "the solver rebalanced the work to reduce lateness and changeovers",
+    "new_order": "it is a new order",
+}
+
+
+def _headline(state: State) -> str:
+    if state["answer_type"] == "explanation":
+        info = _last_changes.get(state["message"])
+        if not info:
+            return f"Order {state['message']} did not move in the last replan."
+        ch = info["change"]
+        return f"Order {ch.order_id} step {ch.step} moved from {ch.from_} to {ch.to} because {REASONS[ch.reason_code]}."
+    r, k = state["result"], state["result"].kpis
+    if not k:
+        return f"No valid plan found (solver status {r.status})."
+    rules = "all rules pass the plan checker" if state["check"] and state["check"].all_ok else "the plan breaks a rule"
+    head = (f"{len(state['problem'].orders)} orders planned: {k.late_orders} late ({k.total_lateness_h} h total), "
+            f"{k.overtime_h} h overtime, {k.changeovers} changeovers; {rules}.")
+    if state["answer_type"] == "replan":
+        events = "; ".join(f"{e.target} down from {e.at:%H:%M} for {e.duration_h} h" if e.kind == "breakdown"
+                           else f"rush order {e.target} arrives {e.at:%H:%M}" for e in state["events"])
+        head = f"Disruption: {events}. {len(state['changes'])} jobs moved. " + head
+    return head
 
 
 # ---------------------------------------------------------------- graph

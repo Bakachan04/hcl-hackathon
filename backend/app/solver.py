@@ -154,7 +154,10 @@ def solve_schedule(problem: Problem, weights: Weights | None = None, *, fixed_jo
         j["release"] = max(0, release)
 
     # The greedy plan runs first: it also tells us how many days the plan needs.
-    placed, sequence = greedy_plan(problem, jobs, setup, window, allow_overtime, blocked_min)
+    # On a replan, the greedy plan repairs the old plan: jobs keep their old slot when still valid.
+    old_slots = {(oj.order_id, oj.step): (oj.machine, _minutes(problem, oj.start), oj.operator)
+                 for oj in old_plan or []}
+    placed, sequence = greedy_plan(problem, jobs, setup, window, allow_overtime, blocked_min, old_slots)
     last_due_day = (max(o.due for o in problem.orders).date() - problem.plan_start.date()).days
     last_used_day = max((p[3] for p in placed.values()), default=0)
     n_days = max(last_due_day, last_used_day) + 1
@@ -362,7 +365,7 @@ def _add_operators(model: cp_model.CpModel, problem: Problem, jobs: list[dict], 
 # ---------------------------------------------------------------- greedy plan and hint
 
 def greedy_plan(problem: Problem, jobs: list[dict], setup, window, allow_overtime: bool = True,
-                blocked_min=()):
+                blocked_min=(), old_slots=None):
     """Simple dispatching rule: fixed jobs first; then orders by earliest due date (then
     priority); each step on the (machine, operator) pair where it finishes soonest, inside
     a shift, after any changeover.
@@ -412,28 +415,45 @@ def greedy_plan(problem: Problem, jobs: list[dict], setup, window, allow_overtim
             t = max(clash)
         return None
 
-    orders = sorted(_by_order(jobs).values(), key=lambda js: (js[0]["order"].due, js[0]["order"].priority))
-    for order_jobs in orders:
-        ready = order_jobs[0]["release"]  # when this order may start
-        for j in order_jobs:
-            if j["id"] in placed:
-                ready = placed[j["id"]][1] + j["duration"]
-                continue
-            best = None
+    if old_slots:
+        # Replan: walk jobs in their old start order; new jobs (rush orders) join at their release.
+        todo = sorted(jobs, key=lambda j: (old_slots.get((j["order"].order_id, j["step"]), (0, j["release"]))[1],
+                                           j["step"]))
+    else:
+        # Fresh plan: orders by earliest due date, then priority; steps in order.
+        orders = sorted(_by_order(jobs).values(), key=lambda js: (js[0]["order"].due, js[0]["order"].priority))
+        todo = [j for order_jobs in orders for j in order_jobs]
+
+    order_ready: dict[str, int] = {}
+    for j in todo:
+        oid = j["order"].order_id
+        if j["id"] in placed:
+            order_ready[oid] = max(order_ready.get(oid, 0), placed[j["id"]][1] + j["duration"])
+            continue
+        ready = max(order_ready.get(oid, 0), j["release"])
+        best = None
+        old = (old_slots or {}).get((oid, j["step"]))
+        if old and old[0] in j["machines"] and old[2] in j["operators"]:
+            m, old_start, op_id = old
+            gap = setup(m_last[m], j["product"]) if m_last[m] else 0
+            if old_start >= max(ready, m_free[m] + gap, op_free[op_id]):
+                slot = earliest_slot(m, op_id, old_start, j["duration"])
+                if slot and slot[0] == old_start:
+                    best = (m, old_start, op_id, slot[1])  # keep the job exactly where it was
+        if best is None:
             for m in j["machines"]:
                 gap = setup(m_last[m], j["product"]) if m_last[m] else 0
                 for op_id in j["operators"]:
-                    slot = earliest_slot(m, op_id, max(ready, j["release"], m_free[m] + gap, op_free[op_id]),
-                                         j["duration"])
+                    slot = earliest_slot(m, op_id, max(ready, m_free[m] + gap, op_free[op_id]), j["duration"])
                     if slot and (best is None or slot[0] < best[1]):
                         best = (m, slot[0], op_id, slot[1])
-            if best is None:
-                raise ValueError(f"No machine/operator can ever run {j['order'].order_id} step {j['step']}")
-            m, start, op_id, day = best
-            placed[j["id"]] = best
-            sequence[m].append(j["id"])
-            ready = m_free[m] = op_free[op_id] = start + j["duration"]
-            m_last[m] = j["product"]
+        if best is None:
+            raise ValueError(f"No machine/operator can ever run {oid} step {j['step']}")
+        m, start, op_id, day = best
+        placed[j["id"]] = best
+        sequence[m].append(j["id"])
+        order_ready[oid] = m_free[m] = op_free[op_id] = start + j["duration"]
+        m_last[m] = j["product"]
     return placed, sequence
 
 
