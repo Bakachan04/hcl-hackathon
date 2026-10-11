@@ -3,8 +3,10 @@
 from fastapi import FastAPI
 
 from app import config
+from app.routes_ingest import router as ingest_router
 
 app = FastAPI(title="Production Re-Planner API")
+app.include_router(ingest_router)
 
 
 def _llm_status() -> str:

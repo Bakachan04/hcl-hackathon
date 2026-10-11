@@ -1,0 +1,106 @@
+{
+  "run_id": "run-20261012-081530",
+  "explanation": "Machine CNC-1 experienced an unexpected breakdown at 08:00 for 2.0 hours. Order O-101 (step 1) was rerouted to CNC-2 to avoid line stoppages. The replanned schedule achieves 0 late orders and 0.5 hours of overtime. There are 2 changeovers across all lines, and all capacity, skill, and routing constraints are verified.",
+  "kpis": {
+    "late_orders": 0,
+    "total_lateness_h": 0.0,
+    "overtime_h": 0.5,
+    "changeovers": 2,
+    "moved_jobs": 1
+  },
+  "check": {
+    "capacity_ok": true,
+    "skill_ok": true,
+    "changeover_ok": true,
+    "precedence_ok": true,
+    "eligibility_ok": true,
+    "shift_ok": true,
+    "wip_ok": true,
+    "breakdown_ok": true,
+    "violations": []
+  },
+  "changes": [
+    {
+      "order_id": "O-101",
+      "step": 1,
+      "from": "CNC-1",
+      "to": "CNC-2",
+      "reason_code": "machine_down",
+      "facts": {
+        "breakdown_machine": "CNC-1",
+        "original_start": "2026-10-12 08:00",
+        "new_start": "2026-10-12 08:00"
+      }
+    }
+  ],
+  "jobs": [
+    {
+      "order_id": "O-101",
+      "step": 1,
+      "product": "P-A",
+      "machine": "CNC-2",
+      "operator": "OP-2",
+      "start": "2026-10-12 08:00",
+      "end": "2026-10-12 09:00",
+      "changed": true
+    },
+    {
+      "order_id": "O-101",
+      "step": 2,
+      "product": "P-A",
+      "machine": "CNC-2",
+      "operator": "OP-2",
+      "start": "2026-10-12 09:00",
+      "end": "2026-10-12 09:30",
+      "changed": false
+    },
+    {
+      "order_id": "O-118",
+      "step": 1,
+      "product": "P-B",
+      "machine": "CNC-1",
+      "operator": "OP-1",
+      "start": "2026-10-12 10:30",
+      "end": "2026-10-12 11:30",
+      "changed": false
+    },
+    {
+      "order_id": "O-102",
+      "step": 1,
+      "product": "P-A",
+      "machine": "CNC-1",
+      "operator": "OP-1",
+      "start": "2026-10-12 12:00",
+      "end": "2026-10-12 13:00",
+      "changed": false
+    },
+    {
+      "order_id": "O-103",
+      "step": 1,
+      "product": "P-C",
+      "machine": "CNC-3",
+      "operator": "OP-3",
+      "start": "2026-10-12 07:00",
+      "end": "2026-10-12 08:30",
+      "changed": false
+    }
+  ],
+  "blocked": [
+    {
+      "machine": "CNC-1",
+      "start": "2026-10-12 08:00",
+      "end": "2026-10-12 10:00"
+    }
+  ],
+  "trace": {
+    "pipeline": "langgraph_replan",
+    "nodes_executed": ["detect_disruption", "solve_schedule", "validate_plan", "diff_plans", "explain"],
+    "solve_time_s": 0.42,
+    "weights_used": {
+      "late": 10.0,
+      "overtime": 3.0,
+      "changeover": 1.0
+    }
+  }
+}
+

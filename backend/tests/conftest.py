@@ -1,4 +1,4 @@
-"""Shared test data. pytest gives `tiny_problem` to any test that names it as an argument.
+"""Shared test data. pytest gives `tiny_problem` / `tmp_db` to any test that names them as an argument.
 
 Tiny plant, small enough to check a schedule by hand:
   - P1 has 2 steps: step 1 on M1 or M2 (machine choice), step 2 only on M2, needs L2.
@@ -11,6 +11,7 @@ from datetime import datetime, time
 
 import pytest
 
+from app import config
 from app.schemas import Changeover, Operator, Order, Problem, RoutingStep
 
 DAY = datetime(2026, 10, 12)
@@ -50,3 +51,11 @@ def tiny_problem() -> Problem:
             Operator(operator_id="OP-3", skill="L2", shift="B", shift_start=time(14), shift_end=time(22)),
         ],
     )
+
+
+@pytest.fixture
+def tmp_db(tmp_path, monkeypatch):
+    """Point the store at a fresh SQLite file for one test."""
+    path = tmp_path / "test.db"
+    monkeypatch.setattr(config, "DB_PATH", path)
+    return path
