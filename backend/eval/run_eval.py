@@ -168,10 +168,13 @@ def independent_check(problem, jobs: list[Job], events: list[Disruption]):
 def _trace_facts(trace: dict) -> dict:
     steps = trace.get("steps") or []
     solve = next((s for s in steps if s.get("tool") == "solve_schedule"), {})
-    facts = next((s for s in steps if s.get("tool") == "check_facts"), None)
+    # The pipeline records the fact check on its "explain" step (fact_check_passed).
+    explain = next((s for s in steps if s.get("tool") in ("explain", "check_facts")), None)
+    out = (explain or {}).get("output") or {}
+    passed = out.get("fact_check_passed", out.get("ok"))
     return {
         "solve_s": (solve.get("output") or {}).get("solve_s"),
-        "faithful": None if facts is None else bool((facts.get("output") or {}).get("ok")),
+        "faithful": None if passed is None else bool(passed),
         "llm_calls": trace.get("llm_calls", 0) or 0,
         "tokens": trace.get("tokens", 0) or 0,
     }
