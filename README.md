@@ -1,109 +1,196 @@
-# HCL Hackathon
+# Production Re-Planner Under Disruption
 
-Full-stack starter for the HCLTech AI Engineer hackathon: a React dashboard backed by a Python API, with data processing and machine learning built in.
+An AI-augmented production scheduling and disruption recovery system built for the HCLTech Hackathon (October 2026). The system replans job schedules under unexpected events (machine breakdowns, rush orders) using constrained optimization, independent validation, and faithful LLM-powered explanations for plant managers.
 
-> **Status:** environment scaffold. The problem statement hasn't been released yet; features will be added once it is.
+---
 
-## Tech stack
+## 1. Architecture Overview
 
-| Layer | Tools |
-|---|---|
-| Frontend | React 19, Vite, Recharts (charts), Lucide React (icons), Oxlint |
-| Backend | Python 3.14, FastAPI, Uvicorn |
-| Data / ML | pandas, NumPy, scikit-learn, SciPy |
-| Utilities | SQLite (built into Python), python-dotenv, httpx |
-| Testing | pytest |
-
-## Project structure
-
+```text
+               +-------------------------------------------+
+               |          Streamlit Dashboard (UI)         |
+               | (Gantt Chart, KPI Tiles, Controls, Trace) |
+               +---------------------+---------------------+
+                                     |  HTTP REST
+                                     v
+               +-------------------------------------------+
+               |              FastAPI Backend              |
+               |   POST /analyze   POST /ingest   GET /trace|
+               +---------------------+---------------------+
+                                     |
+                                     v
+                        +-------------------------+
+                        |   LangGraph Pipeline    |
+                        +------------+------------+
+                                     |
+         +---------------------------+---------------------------+
+         |                           |                           |
+         v                           v                           v
++-------------------+      +-------------------+      +-------------------+
+|  CP-SAT Solver    |      |  Plan Checker     |      |  LLM Explain &    |
+| (Multi-objective  | ---> |  & KPI Engine     | ---> |  Fact-Checking    |
+|  OR-Tools replan) |      | (9 rules referee) |      | (Gemini / Mock)   |
++-------------------+      +-------------------+      +-------------------+
+         |                           |                           |
+         +---------------------------+---------------------------+
+                                     |
+                                     v
+                        +-------------------------+
+                        |      SQLite Store       |
+                        | (Tables, Plans, Traces) |
+                        +-------------------------+
 ```
-hcl-hackathon/
-├── backend/
-│   ├── main.py            # FastAPI app and routes
-│   ├── requirements.txt   # Python dependencies (pinned)
-│   ├── pytest.ini
-│   └── tests/
-└── frontend/
-    ├── src/               # React components
-    ├── vite.config.js     # dev server + /api proxy to the backend
-    └── package.json
-```
 
-## Prerequisites
+### Module Responsibilities
+- **`backend/app/solver.py`**: CP-SAT solver optimizing late orders, overtime hours, and changeover costs under disruptions.
+- **`backend/app/checker.py`**: Independent referee validating 9 critical factory constraints and calculating certified KPIs.
+- **`backend/app/llm.py`**: Resilient LLM wrapper supporting Google Gemini and an offline mock mode with retry and fallback.
+- **`backend/app/explain.py`**: Plain-language plant manager briefing engine equipped with a strict regex fact checker against hallucinations.
+- **`ui/streamlit_app.py`**: Usability-focused dashboard with Plotly Gantt charts, breakdown shading, KPI tiles, and objective weight sliders.
 
-- Python 3.12+ (tested on 3.14)
-- Node.js 20+ and npm (tested on Node 22)
-- Git
+---
 
-## Setup
+## 2. Tech Stack & Prerequisites
 
-### Backend
+- **Python:** 3.12+ (tested and developed on Python 3.13)
+- **Backend:** FastAPI, Uvicorn, Pydantic v2, HTTPX, python-dotenv
+- **Analytics & Solver:** pandas, NumPy, SciPy, scikit-learn, Google OR-Tools
+- **Dashboard:** Streamlit, Plotly Express
+- **Testing:** pytest (27 unit tests across checker, LLM, and explanation modules)
 
-```powershell
+---
+
+## 3. Setup & Running Locally
+
+### Backend Setup
+
+```bash
 cd backend
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate    # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-On macOS/Linux, use `.venv/bin/python` instead of `.\.venv\Scripts\python.exe`.
+### UI Setup
 
-### Frontend
-
-```powershell
-cd frontend
-npm install
+```bash
+# In the same virtual environment (or dedicated UI environment):
+pip install -r ../ui/requirements.txt
 ```
 
-## Running locally
+### Configuration (`backend/.env`)
 
-Start both servers, each in its own terminal.
+Create `backend/.env` (gitignored):
 
-**Backend** (http://127.0.0.1:8000), from `backend/`:
-
-```powershell
-.\.venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000
+```env
+LLM_PROVIDER=gemini
+LLM_MODEL=gemini-3.5-flash-lite
+GEMINI_API_KEY=your_gemini_api_key_here
+MOCK_LLM=false
+PLAN_START=2026-10-12T06:00:00
 ```
 
-**Frontend** (http://localhost:5173), from `frontend/`:
+*Note:* If `GEMINI_API_KEY` is not provided or `MOCK_LLM=true`, the system seamlessly runs in **mock mode**, requiring zero network connectivity or external credentials.
 
-```powershell
-npm run dev
+### Running Servers
+
+Start the backend API (port 8000):
+```bash
+uvicorn main:app --reload --port 8000
 ```
 
-During development, the Vite dev server forwards every request under `/api` to the backend (see `frontend/vite.config.js`), so the frontend calls relative URLs such as `fetch('/api/health')` and no CORS setup is needed.
-
-## API
-
-Interactive API docs are served at http://127.0.0.1:8000/docs while the backend is running.
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/api/health` | Health check, returns `{"status": "ok"}` |
-
-```powershell
-curl http://127.0.0.1:8000/api/health
+Start the Streamlit dashboard (port 8501):
+```bash
+streamlit run ui/streamlit_app.py --server.port 8501
 ```
 
-## Configuration
+---
 
-No environment variables are required yet. When they are (for example an LLM API key), they go in `backend/.env`, which Git ignores, and a `backend/.env.example` with placeholder values will be committed:
+## 4. Docker Deployment
 
-```
-EXAMPLE_API_KEY=your-key-here
-```
+When Docker is installed, launch the containerized application via Docker Compose:
 
-## Testing and linting
-
-```powershell
-# backend, from backend/
-.\.venv\Scripts\python.exe -m pytest
-
-# frontend, from frontend/
-npm run lint
-npm run build
+```bash
+docker compose up --build
 ```
 
-## Known limitations
+- API Docs: `http://localhost:8000/docs`
+- Streamlit UI: `http://localhost:8501`
 
-- The Vite `/api` proxy works only in development (`npm run dev`). A production deployment would need the backend to serve the built frontend, a reverse proxy, or CORS configuration.
-- The chart on the start page uses static sample data to check rendering.
+---
+
+## 5. API Reference & Sample Requests
+
+### 1. Health Check
+```bash
+curl -X GET http://localhost:8000/api/health
+```
+Response:
+```json
+{"status": "ok"}
+```
+
+### 2. Ingest Data (`POST /ingest` - planned)
+```bash
+curl -X POST http://localhost:8000/ingest \
+  -F "orders=@data/raw/orders.csv" \
+  -F "routings=@data/raw/routings.csv" \
+  -F "changeovers_skills=@data/raw/changeovers_skills.csv"
+```
+
+### 3. Re-plan & Analyze (`POST /analyze`)
+```bash
+curl -X POST http://localhost:8000/analyze \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Replan schedule after CNC-1 breakdown",
+    "weights": {
+      "late": 10.0,
+      "overtime": 3.0,
+      "changeover": 1.0
+    },
+    "avoid_overtime": false,
+    "disruption": {
+      "event_id": "D-1",
+      "kind": "breakdown",
+      "at": "2026-10-12T08:00:00",
+      "target": "CNC-1",
+      "duration_h": 2.0
+    }
+  }'
+```
+
+### 4. Fetch Trace (`GET /trace/{run_id}`)
+```bash
+curl -X GET http://localhost:8000/trace/run-20261012-081530
+```
+
+---
+
+## 6. LLM Configuration & Synthetic Data Note
+
+- **Provider Support:** Google Gemini (`gemini-3.5-flash-lite`), with automatic fallback to local deterministic templates.
+- **Privacy & Security:** The free tier of Gemini AI Studio is used for plain-language reasoning. **All datasets, orders, operators, and customer names in this project are 100% synthetic**, containing zero proprietary or personally identifiable information (PII).
+- **Fact-Checking Referee:** The LLM is strictly confined to explaining verified results. The `check_facts` module uses regex extraction to guarantee that every order ID, machine ID, operator ID, clock time, and numerical figure matches certified solver facts. Unsupported items trigger an automatic prompt retry followed by a deterministic code-generated fallback.
+
+---
+
+## 7. Core Assumptions & Domain Rules
+
+1. **Planning Horizon:** Plant local time starting at `PLAN_START` (`2026-10-12 06:00`).
+2. **Shifts:** Shift A = 06:00–14:00, Shift B = 14:00–22:00. Overnight non-working window: 00:00–06:00.
+3. **Overtime:** Jobs may run up to a maximum of 2 hours past an operator's shift end (counted towards the overtime penalty).
+4. **Skills:** Ranked hierarchy: $L_1 < L_2 < L_3$. An operator qualifies for a job if their skill level $\ge \text{skill\_required}$.
+5. **Job Processing:** Each order step represents an atomic job on one machine with one operator; jobs cannot be pre-empted or split. Duration in minutes equals $\lceil\text{quantity} \times \text{minutes\_per\_unit}\rceil$.
+6. **Changeover:** Transitioning between different products on the same machine requires a directional setup gap $\ge \text{changeover\_minutes}$. Consecutive jobs with the same product require 0 gap.
+7. **Precedence:** Step $n+1$ of an order must strictly start after step $n$ has completed.
+8. **Fixed / WIP Jobs:** Immovable jobs (`movable=False`) remain locked to their scheduled machine, operator, and time window.
+9. **Machine Breakdowns:** Scheduled jobs cannot overlap a machine's `Blocked` breakdown window.
+
+---
+
+## 8. Limitations & Known Edge Cases
+
+- **Shift C / Night Shifts:** Current implementation supports Shifts A and B (06:00 to 22:00 plus overtime). True 24/7 continuous operations are not modeled.
+- **Machine Maintenance Calendars:** Breakdowns are modeled as discrete disruption events; recurrent preventive maintenance calendars are not loaded automatically.
+- **Campus Network Firewalls:** If Gemini endpoints are blocked on restricted networks, mock mode (`MOCK_LLM=true`) should be used for evaluation.
