@@ -13,7 +13,7 @@
 | You wait on | For | Until then |
 |---|---|---|
 | Adarsh: A1 `schemas.py` on `main` (~13:05) | The `Job`, `Problem` and `CheckResult` models | Do RD1 (key) and read the rules in Annex A of the guide |
-| Lavanya: generated CSVs (~13:45) | Testing the checker on realistic plans | Hand-written plans on the tiny fixture (`tests/fixtures/tiny/`) |
+| Lavanya: generated CSVs (~13:45) | Testing the checker on realistic plans | Hand-written plans on the `tiny_problem` pytest fixture (`backend/tests/conftest.py`) |
 | Adarsh: real solver plans (~14:30) | Confirming the checker agrees with the solver | Hand-written valid and broken plans |
 | Adarsh: `diff_plans` output (~15:00) | Real input for `explain()` | Hand-written `facts` dicts in the Shared contracts format |
 | Adarsh: `/analyze` running (~15:15) | Wiring the UI to live data | Build the UI against a saved sample response (guide §6.1 JSON) |
