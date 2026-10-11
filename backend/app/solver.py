@@ -44,6 +44,8 @@ TIE_BREAKER = True
 NUM_WORKERS = 8
 # The greedy plan looks at most this many days ahead for a free shift.
 MAX_DAYS = 30
+# Replan stability (R5): cost of moving a job, per hour moved and per machine change.
+STABILITY_WEIGHT = 1
 
 
 # ---------------------------------------------------------------- data preparation
@@ -128,19 +130,31 @@ def _fixed_jobs(problem: Problem, fixed_jobs) -> dict[tuple[str, int], Job]:
 # ---------------------------------------------------------------- solver
 
 def solve_schedule(problem: Problem, weights: Weights | None = None, *, fixed_jobs=(), blocked=(),
-                   not_before=None, old_plan=None, deadline=None, allow_overtime=True,
+                   not_before=None, earliest_start=None, old_plan=None, allow_overtime=True,
                    time_limit_s: float | None = None) -> SolveResult:
-    # blocked, not_before, old_plan, deadline: used from A6 onwards.
+    """Replan inputs (A6):
+      fixed_jobs      jobs that must stay exactly as they are (done or running)
+      blocked         machine breakdown windows
+      not_before      {order_id: datetime} e.g. a rush order cannot start before it arrives
+      earliest_start  nothing that is not fixed may start before this (the disruption time)
+      old_plan        previous plan; moving a job away from it costs STABILITY_WEIGHT
+    """
     weights = weights or Weights()
     jobs = _build_jobs(problem)
     setup = _setup_fn(problem)
     window = _window_fn(problem)
     fixed = _fixed_jobs(problem, fixed_jobs)
+    blocked_min = [(b.machine, max(0, _minutes(problem, b.start)), _minutes(problem, b.end))
+                   for b in blocked if _minutes(problem, b.end) > 0]
     for j in jobs:
         j["fixed"] = fixed.get((j["order"].order_id, j["step"]))
+        release = _minutes(problem, earliest_start) if earliest_start and not j["fixed"] else 0
+        if not_before and j["order"].order_id in not_before:
+            release = max(release, _minutes(problem, not_before[j["order"].order_id]))
+        j["release"] = max(0, release)
 
     # The greedy plan runs first: it also tells us how many days the plan needs.
-    placed, sequence = greedy_plan(problem, jobs, setup, window, allow_overtime)
+    placed, sequence = greedy_plan(problem, jobs, setup, window, allow_overtime, blocked_min)
     last_due_day = (max(o.due for o in problem.orders).date() - problem.plan_start.date()).days
     last_used_day = max((p[3] for p in placed.values()), default=0)
     n_days = max(last_due_day, last_used_day) + 1
@@ -162,8 +176,17 @@ def solve_schedule(problem: Problem, weights: Weights | None = None, *, fixed_jo
             j["on"][m] = on_m
         model.add_exactly_one(j["on"].values())
 
+    # Breakdowns: a fixed "busy" block on the machine that no job may overlap.
+    for m, b_start, b_end in blocked_min:
+        if m in intervals_on_machine:
+            intervals_on_machine[m].append(model.new_fixed_size_interval_var(b_start, b_end - b_start, ""))
+
     for intervals in intervals_on_machine.values():
         model.add_no_overlap(intervals)
+
+    for j in jobs:
+        if not j["fixed"] and j["release"]:
+            model.add(j["start"] >= j["release"])
 
     changeover_arcs, arcs_by_machine = _add_changeovers(model, problem, jobs, setup)
 
@@ -203,16 +226,35 @@ def solve_schedule(problem: Problem, weights: Weights | None = None, *, fixed_jo
         lateness_terms.append(late * factor)
         completion_terms.append(done)
 
+    # --- Stability: moving a job away from the old plan costs something (R5) ---
+    moved_minutes, machine_changes, old_starts = [], [], {}
+    old = {(oj.order_id, oj.step): oj for oj in (old_plan or [])}
+    for j in jobs:
+        oj = old.get((j["order"].order_id, j["step"]))
+        if oj is None or j["fixed"]:
+            continue
+        old_start = old_starts[j["id"]] = _minutes(problem, oj.start)
+        dev = j["moved"] = model.new_int_var(0, horizon, "")
+        model.add(dev >= j["start"] - old_start)
+        model.add(dev >= old_start - j["start"])
+        moved_minutes.append(dev)
+        if oj.machine in j["on"]:
+            machine_changes.append(1 - j["on"][oj.machine])
+
     # Main goal, all in "weight-hours" (times are in minutes, so a changeover counts as
     # 60 minutes of its weight). Tie-breaker (weight 1): finish orders early.
     per_minute = WEIGHT_SCALE * MAIN_COST_SCALE
     model.minimize(round(weights.late * per_minute) * sum(lateness_terms)
                    + round(weights.overtime * per_minute) * sum(overtime_terms)
                    + round(weights.changeover * per_minute) * 60 * sum(changeover_arcs)
+                   + round(STABILITY_WEIGHT * per_minute) * (sum(moved_minutes) + 60 * sum(machine_changes))
                    + (sum(completion_terms) if TIE_BREAKER else 0))
 
     # --- Start from the greedy plan, then let CP-SAT improve it ---
     _add_hint(model, jobs, arcs_by_machine, placed, sequence, late_vars, window)
+    for j in jobs:
+        if "moved" in j:
+            model.add_hint(j["moved"], abs(placed[j["id"]][1] - old_starts[j["id"]]))
 
     # --- Solve ---
     solver = cp_model.CpSolver()
@@ -319,7 +361,8 @@ def _add_operators(model: cp_model.CpModel, problem: Problem, jobs: list[dict], 
 
 # ---------------------------------------------------------------- greedy plan and hint
 
-def greedy_plan(problem: Problem, jobs: list[dict], setup, window, allow_overtime: bool = True):
+def greedy_plan(problem: Problem, jobs: list[dict], setup, window, allow_overtime: bool = True,
+                blocked_min=()):
     """Simple dispatching rule: fixed jobs first; then orders by earliest due date (then
     priority); each step on the (machine, operator) pair where it finishes soonest, inside
     a shift, after any changeover.
@@ -357,9 +400,21 @@ def greedy_plan(problem: Problem, jobs: list[dict], setup, window, allow_overtim
         m_last[f.machine] = j["product"]
         op_free[f.operator] = max(op_free[f.operator], start + j["duration"])
 
+    def earliest_slot(m: str, op_id: str, t: int, duration: int):
+        """Earliest start >= t inside the operator's shift that avoids breakdowns on m."""
+        for _ in range(50):
+            slot = earliest_in_shift(op_id, t, duration)
+            if slot is None:
+                return None
+            clash = [be for bm, bs, be in blocked_min if bm == m and slot[0] < be and slot[0] + duration > bs]
+            if not clash:
+                return slot
+            t = max(clash)
+        return None
+
     orders = sorted(_by_order(jobs).values(), key=lambda js: (js[0]["order"].due, js[0]["order"].priority))
     for order_jobs in orders:
-        ready = 0  # when the previous step of this order ends
+        ready = order_jobs[0]["release"]  # when this order may start
         for j in order_jobs:
             if j["id"] in placed:
                 ready = placed[j["id"]][1] + j["duration"]
@@ -368,7 +423,8 @@ def greedy_plan(problem: Problem, jobs: list[dict], setup, window, allow_overtim
             for m in j["machines"]:
                 gap = setup(m_last[m], j["product"]) if m_last[m] else 0
                 for op_id in j["operators"]:
-                    slot = earliest_in_shift(op_id, max(ready, m_free[m] + gap, op_free[op_id]), j["duration"])
+                    slot = earliest_slot(m, op_id, max(ready, j["release"], m_free[m] + gap, op_free[op_id]),
+                                         j["duration"])
                     if slot and (best is None or slot[0] < best[1]):
                         best = (m, slot[0], op_id, slot[1])
             if best is None:
