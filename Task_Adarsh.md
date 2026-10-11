@@ -45,22 +45,22 @@
 - [x] Lets you build the solver before Lavanya's generator is ready.
 
 ### A3. Solver layer 1: machines, precedence, lateness (13:15–13:45)
-- [ ] `solver.solve_schedule(...)` per the signature in Shared contracts.
-- [ ] One optional interval per (job, eligible machine); exactly one chosen; `NoOverlap` per machine.
-- [ ] Steps of an order run in order (precedence).
-- [ ] Objective: `late weight × Σ priority factor × lateness` (priority 1 → ×3, 2 → ×2, 3 → ×1; `customer_tier` 1 adds ×2). This is R11.
-- [ ] Solver time limit (default 10 s); return `status`, `plan`, `kpis`, `solve_s`.
+- [x] `solver.solve_schedule(...)` per the signature in Shared contracts.
+- [x] One optional interval per (job, eligible machine); exactly one chosen; `NoOverlap` per machine.
+- [x] Steps of an order run in order (precedence).
+- [x] Objective: `late weight × Σ priority factor × lateness` (priority 1 → ×3, 2 → ×2, 3 → ×1; `customer_tier` 1 adds ×2). This is R11.
+- [x] Solver time limit (default 10 s); return `status`, `plan`, `kpis`, `solve_s`.
 
 ### A4. Solver layer 2: changeovers (13:45–14:05)
-- [ ] Sequence-dependent changeover gap on each machine using `AddCircuit` (direction matters: A→B ≠ B→A).
-- [ ] Count changeovers; add `changeover weight × changeovers` to the objective.
-- [ ] **Run Ridhi's checker on the output.** Every plan must pass before moving on.
+- [x] Sequence-dependent changeover gap on each machine using `AddCircuit` (direction matters: A→B ≠ B→A).
+- [x] Count changeovers; add `changeover weight × changeovers` to the objective.
+- [x] **Run Ridhi's checker on the output.** Every plan must pass before moving on.
 
 ### A5. Solver layer 3: operators, shifts, overtime (14:05–14:30)
-- [ ] Each job gets exactly one qualified operator (skill level ≥ required), `NoOverlap` per operator.
-- [ ] Job must sit inside the operator's shift window, or extend at most 2 h past shift end (overtime).
-- [ ] Add `overtime weight × overtime minutes` to the objective.
-- [ ] Test on Lavanya's generated data; checker must report all OK.
+- [x] Each job gets exactly one qualified operator (skill level ≥ required), `NoOverlap` per operator.
+- [x] Job must sit inside the operator's shift window, or extend at most 2 h past shift end (overtime).
+- [x] Add `overtime weight × overtime minutes` to the objective.
+- [x] Test on Lavanya's generated data; checker must report all OK.
 
 ### A6. Re-planning and plan diff (14:30–15:00)
 - [ ] Jobs that ended before the disruption time `at`, and jobs running at `at` on other machines, are **fixed**. WIP with `movable = false` is fixed.
