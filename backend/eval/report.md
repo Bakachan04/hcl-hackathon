@@ -43,27 +43,27 @@ Add `--url http://localhost:8000` to test a running server (for example the Dock
 
 Three configurations, all on the seed-42 pack, run in-process. Raw per-case results: `eval/results/*.json`.
 
-| Metric | **A: solver 10 s (chosen)** | B: solver 3 s | C: solver 10 s + Gemini LLM |
+| Metric | **A: solver 10 s (chosen)** | B: solver 3 s | C: solver 10 s + Gemini LLM (`gemini-3.5-flash-lite`) |
 |---|---|---|---|
-| Cases passed | **24 / 24** | 24 / 24 | 21 / 24 (run before the A7 fix) |
-| answer_type accuracy | 100% | 100% | 87.5% |
+| Cases passed | **24 / 24** | 24 / 24 | 24 / 24 |
+| answer_type accuracy | 100% | 100% | 100% |
 | Plan validity (API validator and our own checker agree) | **17 / 17 = 100%** | 17 / 17 = 100% | 17 / 17 = 100% |
-| Avg late orders per plan | **7.0** | 11.9 | 5.4 |
-| Avg total lateness (h) | **27.3** | 43.8 | 25.1 |
-| Avg overtime (h) | **2.6** | 8.3 | 2.6 |
-| Avg changeovers | **31.5** | 36.1 | 31.4 |
-| Avg jobs moved per re-plan | 56.7 | 42.0 | 46.7 |
-| Solve time p50 / max (s) | 10.1 / 11.0 | 3.2 / 3.5 | 10.2 / 10.6 |
-| Latency p50 / p95 (s) | 10.6 / 11.9 | 4.1 / 4.8 | 12.6 / 19.5 |
+| Avg late orders per plan | **7.0** | 11.9 | 4.9 |
+| Avg total lateness (h) | **27.3** | 43.8 | 26.6 |
+| Avg overtime (h) | **2.6** | 8.3 | 2.2 |
+| Avg changeovers | **31.5** | 36.1 | 36.5 |
+| Avg jobs moved per re-plan | 56.7 | 42.0 | 43.3 |
+| Solve time p50 / max (s) | 10.1 / 11.0 | 3.2 / 3.5 | 10.2 / 10.5 |
+| Latency p50 / p95 (s) | 10.6 / 11.9 | 4.1 / 4.8 | 12.8 / 15.8 |
 | Explanation faithfulness | 100% | 100% | **100% (19 / 19 LLM explanations)** |
-| LLM calls / tokens (whole run) | 0 / 0 (mock) | 0 / 0 (mock) | 20 / 22,214 (~1.1k per request) |
+| LLM calls / tokens (whole run) | 0 / 0 (mock) | 0 / 0 (mock) | 19 / 22,669 (~1.2k per LLM call) |
 
 Averages include the stress cases (6 h breakdown on a bottleneck machine, impossible deadlines), which is why late orders are well above the 0–1 of the undisrupted plan.
 
 ### Choice and why
 
 - **Solver time limit 10 s (A) over 3 s (B):** A has about 40% fewer late orders (7.0 vs 11.9), 38% less lateness and about 70% less overtime. B is about 6 s faster per request and moves fewer jobs, but lands much worse plans. A replan "within a few minutes" (guide 4.6) is met easily by 10 s.
-- **LLM on (C) vs mock (A):** plan quality is the same, because the solver builds the plan either way. The LLM adds about 2 s median latency and about 1.1k tokens per request. In exchange it gives a readable explanation, and every one passed the fact check. We demo with the LLM on and keep mock mode as the fallback.
+- **LLM on (C) vs mock (A):** the LLM cannot change the plan, because the solver builds it either way; the KPI differences between A and C (e.g. 7.0 vs 4.9 late orders) are CP-SAT's run-to-run variation (see Limits), not an LLM effect. The LLM adds about 2 s median latency and about 1.2k tokens per explanation. In exchange it gives a readable explanation, and every one passed the fact check. We demo with the LLM on and keep mock mode as the fallback.
 
 ### History (what the evaluation caught)
 

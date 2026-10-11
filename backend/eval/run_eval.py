@@ -168,10 +168,15 @@ def independent_check(problem, jobs: list[Job], events: list[Disruption]):
 def _trace_facts(trace: dict) -> dict:
     steps = trace.get("steps") or []
     solve = next((s for s in steps if s.get("tool") == "solve_schedule"), {})
-    # The pipeline records the fact check on its "explain" step (fact_check_passed).
-    explain = next((s for s in steps if s.get("tool") in ("explain", "check_facts")), None)
-    out = (explain or {}).get("output") or {}
-    passed = out.get("fact_check_passed", out.get("ok"))
+    # The fact check is its own "check_facts" step ({"ok": ...}); older traces put it on
+    # the "explain" step as fact_check_passed.
+    passed = None
+    for tool, key in (("check_facts", "ok"), ("explain", "fact_check_passed")):
+        step = next((s for s in steps if s.get("tool") == tool), None)
+        out = (step or {}).get("output") or {}
+        if key in out:
+            passed = out[key]
+            break
     return {
         "solve_s": (solve.get("output") or {}).get("solve_s"),
         "faithful": None if passed is None else bool(passed),
@@ -212,7 +217,7 @@ def run(label: str, url: str | None, cases_path: Path, data_dir: Path, reload_da
         kpis = resp.get("kpis") or {}
         done = order_completion(jobs)
         rows.append({
-            "id": case["id"], "category": case["category"], "status": status,
+            "id": case["id"], "category": case["category"], "run_id": resp.get("run_id"), "status": status,
             "answer_type": resp.get("answer_type"), "passed": not fails, "fails": fails,
             "jobs": len(jobs), "plan_ok": plan_ok, "api_validator_ok": api_ok, "own_checker_ok": own_ok,
             "late_orders": kpis.get("late_orders"), "total_lateness_h": kpis.get("total_lateness_h"),
