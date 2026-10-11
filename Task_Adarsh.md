@@ -201,6 +201,8 @@ explain.check_facts(text: str, facts: dict) -> dict        # {"ok": bool, "unkno
 ```
 
 ### Git rules
-- Work on your own branch (`adarsh/solver`, `lavanya/loader`, `ridhi/checker`, …). Pull `main` before starting each task.
+- Each person works only on their own branch: `Adarsh`, `Lavanya`, `Ridhi`. First time: `git fetch` then `git switch <YourName>`.
+- Before each task, bring in teammates' merged work: `git pull origin main`.
+- To deliver: open a Pull Request from your branch into `main` on GitHub and merge it.
 - Merge to `main` at least once an hour. Everyone must have commits (judges check the history).
 - Never commit `.env`, keys or `data/raw/`.
