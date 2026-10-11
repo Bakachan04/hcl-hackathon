@@ -63,24 +63,24 @@
 - [x] Test on Lavanya's generated data; checker must report all OK.
 
 ### A6. Re-planning and plan diff (14:30–15:00)
-- [ ] Jobs that ended before the disruption time `at`, and jobs running at `at` on other machines, are **fixed**. WIP with `movable = false` is fixed.
-- [ ] Breakdown → blocked interval on that machine from `at` to `at + duration_h`. A job running on the broken machine at `at` restarts from scratch (documented assumption).
-- [ ] Rush order → new order that cannot start before `at`.
-- [ ] Stability (R5): penalty for each job that changes machine or moves more than 30 min; pass the old plan to CP-SAT as a hint (`AddHint`).
-- [ ] `diff.diff_plans(old, new, events)` → list of `Change` with a `reason_code` computed in code, never by the LLM.
+- [x] Jobs that ended before the disruption time `at`, and jobs running at `at` on other machines, are **fixed**. WIP with `movable = false` is fixed.
+- [x] Breakdown → blocked interval on that machine from `at` to `at + duration_h`. A job running on the broken machine at `at` restarts from scratch (documented assumption).
+- [x] Rush order → new order that cannot start before `at`.
+- [x] Stability (R5): penalty for each job that changes machine or moves more than 30 min; pass the old plan to CP-SAT as a hint (`AddHint`).
+- [x] `diff.diff_plans(old, new, events)` → list of `Change` with a `reason_code` computed in code, never by the LLM.
 
 ### A7. Infeasible requests and trade-offs (15:00–15:20)
 - [ ] Deadline request ("finish all by 17:00") → hard deadline. If the solver returns `INFEASIBLE`, re-solve with a soft deadline and return the closest alternative (answer type `infeasible`).
 - [ ] Trade-off ("what if we avoid overtime?") → solve twice (overtime allowed vs not) and return both sets of KPIs.
 
 ### A8. Pipeline and API (15:00–15:30, overlaps A7)
-- [ ] `graph.py`: LangGraph nodes `parse_request → load_state → solve_schedule → validate_plan → diff_plans → explain → check_facts → save_trace`. Each node appends a step to the trace (Annex C format).
-- [ ] Request routing with keyword rules → answer types `plan`, `replan`, `infeasible`, `explanation`, `clarification_needed`, `refused` (guide §6.2).
+- [x] `graph.py`: LangGraph nodes `parse_request → load_state → solve_schedule → validate_plan → diff_plans → explain → check_facts → save_trace`. Each node appends a step to the trace (Annex C format).
+- [x] Request routing with keyword rules → answer types `plan`, `replan`, `infeasible`, `explanation`, `clarification_needed`, `refused` (guide §6.2).
   - "Skip the skill check" and similar → `refused`.
   - "Write the schedule yourself" → still goes to the solver; the LLM never writes a plan.
   - Unknown machine or order → `clarification_needed`.
-- [ ] `POST /analyze` returns exactly the guide §6.1 response format. `GET /trace/{run_id}` returns the stored trace.
-- [ ] A plan is returned **only if** the checker says all OK; otherwise return the violations.
+- [x] `POST /analyze` returns exactly the guide §6.1 response format. `GET /trace/{run_id}` returns the stored trace.
+- [x] A plan is returned **only if** the checker says all OK; otherwise return the violations.
 
 ### A9. Integration (15:30–15:50)
 - [ ] Swap stubs for Lavanya's loader/store and Ridhi's explain/check_facts.

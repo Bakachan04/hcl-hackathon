@@ -7,7 +7,15 @@ import math
 from datetime import datetime, time
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_serializer
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_serializer,
+    field_validator,
+)
 
 TIME_FMT = "%Y-%m-%d %H:%M"
 
@@ -175,9 +183,16 @@ AnswerType = Literal["plan", "replan", "infeasible", "explanation", "clarificati
 
 
 class AnalyzeRequest(BaseModel):
-    request: str = Field(min_length=1)
+    # "message" is accepted too (the Streamlit UI sends it); one disruption or a list.
+    request: str = Field(min_length=1, validation_alias=AliasChoices("request", "message"))
     disruption: list[Disruption] | None = None
     weights: Weights | None = None
+    avoid_overtime: bool = False
+
+    @field_validator("disruption", mode="before")
+    @classmethod
+    def _one_or_many(cls, value):
+        return [value] if isinstance(value, dict) else value
 
 
 class AnalyzeResponse(BaseModel):
