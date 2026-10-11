@@ -52,9 +52,9 @@
 - [x] Solver time limit (default 10 s); return `status`, `plan`, `kpis`, `solve_s`.
 
 ### A4. Solver layer 2: changeovers (13:45–14:05)
-- [ ] Sequence-dependent changeover gap on each machine using `AddCircuit` (direction matters: A→B ≠ B→A).
-- [ ] Count changeovers; add `changeover weight × changeovers` to the objective.
-- [ ] **Run Ridhi's checker on the output.** Every plan must pass before moving on.
+- [x] Sequence-dependent changeover gap on each machine using `AddCircuit` (direction matters: A→B ≠ B→A).
+- [x] Count changeovers; add `changeover weight × changeovers` to the objective.
+- [x] **Run Ridhi's checker on the output.** Every plan must pass before moving on.
 
 ### A5. Solver layer 3: operators, shifts, overtime (14:05–14:30)
 - [ ] Each job gets exactly one qualified operator (skill level ≥ required), `NoOverlap` per operator.

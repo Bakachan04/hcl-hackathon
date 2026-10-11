@@ -5,6 +5,7 @@ import itertools
 
 from conftest import at
 
+from app.checker import compute_kpis, validate_plan
 from app.schemas import job_minutes
 from app.solver import solve_schedule
 
@@ -59,3 +60,51 @@ def test_priority_1_order_is_protected_when_someone_must_be_late(tiny_problem):
         done[job.order_id] = max(done.get(job.order_id, job.end), job.end)
     assert done["O-1"] <= at(9)
     assert done["O-3"] > at(9)
+
+
+# ---------- Layer 2: changeovers (A4) ----------
+
+def test_solver_avoids_needless_changeovers(tiny_problem):
+    # P1 step 1 can go on M2, so the best plan keeps M1 for P2 only: no product switch at all.
+    assert solve_schedule(tiny_problem, time_limit_s=5).kpis.changeovers == 0
+
+
+def test_changeover_gaps_respected_in_the_right_direction(tiny_problem):
+    # Force a switch: P1 step 1 may now only run on M1, which also runs P2.
+    next(r for r in tiny_problem.routings if r.product == "P1" and r.step == 1).machines = ["M1"]
+    minutes = {(c.from_product, c.to_product): c.minutes for c in tiny_problem.changeovers}
+    jobs = sorted(solve_schedule(tiny_problem, time_limit_s=5).jobs, key=lambda j: (j.machine, j.start))
+    switches = 0
+    for a, b in itertools.pairwise(jobs):
+        if a.machine == b.machine and a.product != b.product:
+            switches += 1
+            assert (b.start - a.end).total_seconds() / 60 >= minutes[(a.product, b.product)]
+    assert switches >= 1  # M1 must run both P1 and P2 here, so the test is not vacuous
+
+
+def test_checker_accepts_machine_rules_of_solver_plan(tiny_problem):
+    # Operators/shifts are layer 3 (A5); everything else must already pass Ridhi's checker.
+    result = solve_schedule(tiny_problem, time_limit_s=5)
+    check = validate_plan(tiny_problem, result.jobs)
+    assert check.capacity_ok and check.changeover_ok and check.precedence_ok and check.eligibility_ok
+
+
+def test_kpis_come_from_the_checker(tiny_problem):
+    result = solve_schedule(tiny_problem, time_limit_s=5)
+    assert result.kpis == compute_kpis(tiny_problem, result.jobs)
+
+
+def test_generated_data_plan_passes_machine_rules(tmp_path, tmp_db):
+    # Lavanya's 45-order data set: the solver must produce a plan Ridhi's checker accepts
+    # on every machine rule. (Operators and shifts come in layer 3.)
+    from app.loader import load_folder, load_problem
+    from scripts.generate_data import generate
+
+    generate(seed=42, out=tmp_path)
+    load_folder(tmp_path)
+    problem = load_problem()
+    result = solve_schedule(problem, time_limit_s=5)
+    assert result.status in {"OPTIMAL", "FEASIBLE"}
+    check = validate_plan(problem, result.jobs)
+    assert check.capacity_ok and check.changeover_ok and check.precedence_ok and check.eligibility_ok
+    assert result.kpis.late_orders == 0  # the greedy start alone achieves this
